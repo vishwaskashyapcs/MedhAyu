@@ -60,6 +60,8 @@ INDEX = r"""
             <p class="text-sm text-gray-600 mb-1">Summary</p>
             <!-- CHANGED: pre → div so we can inject rich HTML -->
             <div id="summary" class="text-sm bg-white border rounded p-2"></div>
+            <div id="impactBox" class="mt-4 bg-blue-50 border border-blue-200 rounded p-3 text-sm"></div>
+
           </div>
           <div class="mt-3">
             <button id="btnSpeak" class="bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700">🔊 Speak Result</button>
@@ -188,6 +190,32 @@ function renderSopChips(sopsArr) {
     return `<span class="inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs mr-1 mb-1">${code}</span>`;
   }).join("");
 }
+
+/* ---- AI vs Manual Impact Widget ---- */
+async function renderImpact(crId) {
+  const box = document.getElementById('impactBox');
+  if (!box) return;
+  box.innerHTML = "⏱ Calculating impact...";
+  try {
+    const res = await fetch(`/cr/${crId}/sla`);
+    const data = await res.json();
+    if (data.error) { box.innerHTML = "Error loading impact"; return; }
+
+    const b = data.manual_baseline_h ?? "—";
+    const ai = data.ai_elapsed_h ?? "—";
+    const sla = data.sla_target_h ?? "—";
+    const saved = data.time_saved_h ?? "—";
+    const pct = data.time_saved_pct ?? "—";
+
+    box.innerHTML = `
+      <div><b>🎯 SLA Target:</b> ${sla}h</div>
+    
+      </div>`;
+  } catch (err) {
+    box.innerHTML = "⚠️ Impact data unavailable.";
+  }
+}
+
 // ---------------------------------------------
  
 function setRoleUI() {
@@ -244,7 +272,7 @@ btnMicServer.addEventListener("click", async () => {
       };
       mediaRecorder.start();
       recording = true;
-      btnMicServer.textContent = "☁️ Stop";
+      btnMicServer.textContent = "☁️  Stop";
       micStatus.textContent = "Recording (server)…";
     } catch (e) {
       micStatus.textContent = "Mic error: " + e.message;
@@ -341,8 +369,10 @@ btnRunAI.addEventListener("click", async () => {
   confidence.textContent = data.confidence?.toFixed ? data.confidence.toFixed(2) : String(data.confidence ?? "—");
   rationale.textContent = data.rationale || "—";
   sops.innerHTML = renderSopChips(data.matched_sops);
+  renderImpact(currentCR);
 });
- 
+
+
 // Admin inbox (dept_head)
 btnRefreshInbox.addEventListener("click", loadInbox);
 async function loadInbox() {

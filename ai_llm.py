@@ -1,9 +1,9 @@
 import os, json, time
-from app import db
 from models import Department, User, SOPItem, ChangeRequest
 from openai import OpenAI
 from dotenv import load_dotenv
 from utils import log_stage
+from utils_sla import set_status
 
 from extensions import db         # <-- here
 from sqlalchemy import case
@@ -250,11 +250,19 @@ def run_ai_for_cr(cr_id: int):
     log_stage(cr.id, "start", f"CR '{cr.title}'")
     prompt = _user_prompt(f"{cr.title}\n\n{cr.description or ''}")
     log_stage(cr.id, "prompt_ready", "Prepared context & prompt")
+    # try:
+    #     raw = _call_llm_json(SYSTEM_PROMPT, prompt, temperature=0.2, retries=1)
+    #     data_raw = json.loads(raw)
+    #     log_stage(cr.id, "llm_ok", "LLM returned JSON")
+    # except Exception:
+    #     data_raw = None
+    #     log_stage(cr.id, "llm_error", f"{e}", level="error")
+
     try:
         raw = _call_llm_json(SYSTEM_PROMPT, prompt, temperature=0.2, retries=1)
         data_raw = json.loads(raw)
         log_stage(cr.id, "llm_ok", "LLM returned JSON")
-    except Exception:
+    except Exception as e:
         data_raw = None
         log_stage(cr.id, "llm_error", f"{e}", level="error")
 
@@ -285,9 +293,9 @@ def run_ai_for_cr(cr_id: int):
     conf = float(data.get("confidence") or 0.0)
     if dept and dept != "Manual Review" and conf >= conf_threshold:
         cr.department = dept
-        cr.status = "IN_REVIEW"
+        set_status(cr, "IN_REVIEW", note="AI confident routing") 
     else:
-        cr.status = "NEW"
+        set_status(cr, "NEW", note="AI low confidence/manual review")
 
     db.session.commit()
     log_stage(cr.id, "status", f"{cr.status} ({cr.department})")

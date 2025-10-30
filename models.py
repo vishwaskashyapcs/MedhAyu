@@ -31,6 +31,14 @@ class ChangeRequest(db.Model):
     ai_summary = db.Column(db.JSON, nullable=True)
     ai_routing = db.Column(db.JSON, nullable=True)
 
+    # models.py (only the DateTime fields shown)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), onupdate=db.func.now())
+    status_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    manual_baseline_hours = db.Column(db.Float)  # “typical” manual TAT for this CR
+    ai_elapsed_seconds = db.Column(db.Integer, nullable=True)
+
 class SLA(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     status = db.Column(db.String(30), unique=True)
@@ -44,3 +52,11 @@ class CRLog(db.Model):
     message = db.Column(db.Text)
     level = db.Column(db.String(10), default="info")  # info|warn|error
     ts = db.Column(db.DateTime, server_default=db.func.now())
+
+class CRStatusHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cr_id = db.Column(db.Integer, db.ForeignKey('change_request.id'), index=True, nullable=False)
+    from_status = db.Column(db.String(30))
+    to_status = db.Column(db.String(30))
+    changed_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    note = db.Column(db.Text)
