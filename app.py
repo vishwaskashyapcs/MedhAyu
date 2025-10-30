@@ -60,8 +60,10 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 from routes_ai import ai_bp
 from routes_core import core_bp
 from routes_ui import ui_bp
+from routes_chatbot import chatbot_bp
+from routes_voice import voice_bp
 app.register_blueprint(ui_bp)
 app.register_blueprint(ai_bp)
 app.register_blueprint(core_bp)
-from routes_voice import voice_bp
 app.register_blueprint(voice_bp)
+app.register_blueprint(chatbot_bp)
