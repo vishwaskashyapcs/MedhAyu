@@ -1,0 +1,6 @@
+status,sla_hours,amber_threshold_hours
+NEW,48,42
+IN_REVIEW,72,60
+QA_REVIEW,48,42
+IMPLEMENTED,0,0
+CLOSED,0,0

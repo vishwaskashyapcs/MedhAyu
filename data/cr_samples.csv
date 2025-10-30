@@ -1,0 +1,11 @@
+cr_id,title,department,risk,description
+1,Replace nozzle on Line 3 due to corrosion,Manufacturing,Moderate,Current SS nozzle shows corrosion; propose coated titanium; affects batch record.
+2,Revise SOP for electronic signatures,Quality Assurance,Minor,Update Part 11 section; training and audit impact.
+3,Adopt new HPLC column for assay method,Quality Control,Moderate,Column backpressure issues; new column validation.
+4,Change PM frequency for autoclave,Engineering,Minor,PM from 6 to 3 months; calibration record update.
+5,Upgrade CSV ingestion ETL,Validation / CSV,Moderate,Fix checksum errors; improve audit trail.
+6,Update backup policy for MES,IT Systems,Minor,Add weekly restore test; improve access control.
+7,Update carton label warning,Regulatory Affairs,Moderate,Add black box warning per guidance.
+8,Change API supplier,Supply Chain / Warehouse,Major,Vendor A to Vendor B; requalification needed.
+9,Revise PPE requirement for solvents,EHS,Minor,Add face shield; training impact.
+10,Adjust granulation mixing time,R&D / Formulation,Moderate,Mixing 8→10 min; process validation impact.

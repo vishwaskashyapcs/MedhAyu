@@ -1,0 +1,11 @@
+code,title,content_snippet,owner_department,keywords
+SOP-MFG-03,Line 3 Nozzle Replacement,Procedure for nozzle replacement and verification,Manufacturing,"line 3,nozzle,replacement,CAPA"
+SOP-QA-08,SOP Revision and Version Control,Controlled SOP revision and review cycles,Quality Assurance,"SOP,revision,document control,training"
+SOP-QC-05,HPLC Method Validation,HPLC method validation and acceptance criteria,Quality Control,"HPLC,assay,validation,column"
+SOP-ENG-10,Preventive Maintenance,Define PM frequency and critical equipment,Engineering,"maintenance,PM,calibration,equipment"
+SOP-CSV-07,CSV for ETL Pipelines,Validation of CSV ingestion and hashing,Validation / CSV,"CSV,ETL,ingestion,checksum,pipeline"
+SOP-IT-SEC-02,Access Control & Backups,IT access and backup procedures,IT Systems,"LIMS,MES,backup,restore,access"
+SOP-RA-04,Labeling & Dossier Alignment,Changes to labeling content,Regulatory Affairs,"label,packaging,dossier,submission"
+SOP-SC-06,Approved Supplier Change,Supplier change and material qualification,Supply Chain / Warehouse,"supplier,vendor,material,COA"
+SOP-EHS-03,PPE & Waste Segregation,Safety PPE and waste segregation,EHS,"PPE,spill,hazard,segregation,waste"
+SOP-RND-12,Scale-Up Parameter Transfer,Transfer of process parameters,R&D / Formulation,"scale-up,formulation,mixing,granulation"

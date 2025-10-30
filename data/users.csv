@@ -1,0 +1,12 @@
+user_id,name,email,role,department_id
+1,Asha Menon,asha.menon@plant.local,user,1
+2,Ravi Kumar,ravi.kumar@plant.local,dept_head,1
+3,Priya Nair,priya.nair@qa.local,qa,2
+4,Anil Verma,anil.verma@qc.local,dept_head,3
+5,Deepa Iyer,deepa.iyer@eng.local,dept_head,4
+6,Neha Gupta,neha.gupta@validation.local,dept_head,5
+7,Vikas Shah,vikas.shah@it.local,dept_head,6
+8,Sonia Rao,sonia.rao@regaff.local,dept_head,7
+9,Mohit Jain,mohit.jain@supply.local,dept_head,8
+10,Kiran Patil,kiran.patil@ehs.local,dept_head,9
+11,Nisha Kulkarni,nisha.kulkarni@rnd.local,dept_head,10
