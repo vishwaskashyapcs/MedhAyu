@@ -96,9 +96,40 @@ def reroute_cr(cr_id):
     log_stage(c.id, "reroute", f"Dept head rerouted: {old or '—'} → {target_dept}")
     return jsonify({"ok": True, "status": c.status, "department": c.department})
 
+# # ---- QA Board (super admin)
+# @core_bp.route("/board/qa", methods=["GET"])
+# def qa_board():
+#     crs = ChangeRequest.query.order_by(ChangeRequest.id.asc()).all()
+#     out = []
+#     for c in crs:
+#         out.append({
+#             "id": c.id, "title": c.title, "dept": c.department,
+#             "status": c.status, "ai": c.ai_routing
+#         })
+#     return jsonify(out)
+
+# # ---- QA override (manual changes)
+# @core_bp.route("/cr/<int:cr_id>/override", methods=["POST"])
+# def qa_override(cr_id):
+#     data = request.get_json(silent=True) or {}
+#     c = db.session.get(ChangeRequest, cr_id)
+#     if not c: return jsonify({"error":"CR not found"}), 404
+#     old_dept, old_status = c.department, c.status
+#     if "department" in data: c.department = data["department"]
+#     if "status" in data: c.status = data["status"]
+#     if "ai_routing" in data: c.ai_routing = data["ai_routing"]
+#     db.session.commit()
+#     log_stage(c.id, "qa_override", f"QA override: dept {old_dept or '—'}→{c.department or '—'}, status {old_status}→{c.status}")
+#     return jsonify({"ok": True})
+
 # ---- QA Board (super admin)
 @core_bp.route("/board/qa", methods=["GET"])
 def qa_board():
+    # auth: only Quality Control users
+    user_id = request.args.get("user_id", type=int) or request.headers.get("X-User-Id", type=int)
+    if not user_id or not _can_see_super_admin(user_id):
+        return jsonify({"error": "forbidden"}), 403
+
     crs = ChangeRequest.query.order_by(ChangeRequest.id.asc()).all()
     out = []
     for c in crs:
@@ -111,6 +142,11 @@ def qa_board():
 # ---- QA override (manual changes)
 @core_bp.route("/cr/<int:cr_id>/override", methods=["POST"])
 def qa_override(cr_id):
+    # auth: only Quality Control users
+    user_id = request.args.get("user_id", type=int) or request.headers.get("X-User-Id", type=int)
+    if not user_id or not _can_see_super_admin(user_id):
+        return jsonify({"error": "forbidden"}), 403
+
     data = request.get_json(silent=True) or {}
     c = db.session.get(ChangeRequest, cr_id)
     if not c: return jsonify({"error":"CR not found"}), 404
@@ -206,3 +242,19 @@ def sla_summary():
         "states": buckets,
         "ai_time_saved_hours_est": round(saved_hours, 1)
     })
+
+# --- helper: is this user allowed to see the Super Admin (QA) board?
+def _can_see_super_admin(user_id: int) -> bool:
+    u = db.session.get(User, user_id)
+    if not u:
+        return False
+    d = db.session.get(Department, u.department_id)
+    # Only users from the "Quality Control" department are allowed
+    return bool(d and d.name == "Quality Control")
+
+# --- probe endpoint the UI can call to decide whether to show the QA board
+@core_bp.route("/auth/can_see_qa/<int:user_id>", methods=["GET"])
+def can_see_qa(user_id):
+    if _can_see_super_admin(user_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "forbidden"}), 403
