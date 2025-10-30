@@ -14,6 +14,7 @@ from flask import Blueprint, request, jsonify
 from extensions import db
 from models import ChangeRequest, User, Department, CRLog
 from utils import log_stage
+from utils_sla import compute_sla_for, set_status
 
 core_bp = Blueprint("core_bp", __name__)
 
@@ -78,7 +79,7 @@ def inbox_dept_head(user_id):
 def approve_cr(cr_id):
     c = db.session.get(ChangeRequest, cr_id)
     if not c: return jsonify({"error":"CR not found"}), 404
-    c.status = "QA_REVIEW"    # next lane to QA
+    set_status(c, "QA_REVIEW", note="Dept head approved")
     db.session.commit()
     log_stage(c.id, "approve", "Dept head approved; moved to QA_REVIEW")
     return jsonify({"ok": True, "status": c.status})
@@ -90,7 +91,7 @@ def reroute_cr(cr_id):
     c = db.session.get(ChangeRequest, cr_id)
     if not c: return jsonify({"error":"CR not found"}), 404
     c.department = target_dept
-    c.status = "IN_REVIEW"
+    set_status(c, "IN_REVIEW", note=f"Rerouted to {target_dept}")
     db.session.commit()
     log_stage(c.id, "reroute", f"Dept head rerouted: {old or '—'} → {target_dept}")
     return jsonify({"ok": True, "status": c.status, "department": c.department})
@@ -130,3 +131,38 @@ def debug_dept_heads():
         if d:
             out[d.name] = {"user_id": u.id, "name": u.name}
     return jsonify(out)
+
+# --- NEW: per-CR SLA widget data
+@core_bp.route("/cr/<int:cr_id>/sla", methods=["GET"])
+def cr_sla(cr_id):
+    c = db.session.get(ChangeRequest, cr_id)
+    if not c: return jsonify({"error":"CR not found"}), 404
+    return jsonify(compute_sla_for(c))
+
+# --- NEW: rollup SLA summary for dashboard
+@core_bp.route("/sla/summary", methods=["GET"])
+def sla_summary():
+    """
+    Returns totals by state + simple 'AI time saved' estimate:
+    We estimate manual routing latency of 24h; if AI put a CR directly into IN_REVIEW on submit,
+    we count that as saved_hours for that CR.
+    """
+    from sqlalchemy import func
+    crs = ChangeRequest.query.all()
+    buckets = {"on_track":0, "amber":0, "breached":0, "n/a":0}
+    saved_hours = 0.0
+
+    for c in crs:
+        m = compute_sla_for(c)
+        buckets[m["state"]] = buckets.get(m["state"], 0) + 1
+        # naive demo metric: if the CR moved to IN_REVIEW within 5 minutes of creation → assume 24h saved
+        if c.status == "IN_REVIEW" and c.created_at and c.status_started_at:
+            if (c.status_started_at - c.created_at).total_seconds() <= 5*60:
+                saved_hours += 24.0
+
+    total = len(crs)
+    return jsonify({
+        "total": total,
+        "states": buckets,
+        "ai_time_saved_hours_est": round(saved_hours, 1)
+    })

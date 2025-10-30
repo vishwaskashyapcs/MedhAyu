@@ -244,7 +244,7 @@ btnMicServer.addEventListener("click", async () => {
       };
       mediaRecorder.start();
       recording = true;
-      btnMicServer.textContent = "☁️ Stop";
+      btnMicServer.textContent = "☁️  Stop";
       micStatus.textContent = "Recording (server)…";
     } catch (e) {
       micStatus.textContent = "Mic error: " + e.message;
