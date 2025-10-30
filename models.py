@@ -1,8 +1,11 @@
+# models.py
 from app import db
 
 class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True)
+
+    users = db.relationship("User", backref="department_obj", lazy=True)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
