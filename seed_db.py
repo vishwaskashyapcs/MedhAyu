@@ -1,5 +1,6 @@
 import pandas as pd
-from app import app, db
+from app import app
+from extensions import db 
 from models import Department, User, SOPItem, ChangeRequest, SLA
 
 def run():
