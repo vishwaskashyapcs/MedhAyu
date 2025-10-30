@@ -132,12 +132,52 @@ def debug_dept_heads():
             out[d.name] = {"user_id": u.id, "name": u.name}
     return jsonify(out)
 
-# --- NEW: per-CR SLA widget data
 @core_bp.route("/cr/<int:cr_id>/sla", methods=["GET"])
 def cr_sla(cr_id):
+    from utils_benchmark import estimate_manual_baseline_for
+    from utils_sla import compute_sla_for
+
     c = db.session.get(ChangeRequest, cr_id)
-    if not c: return jsonify({"error":"CR not found"}), 404
-    return jsonify(compute_sla_for(c))
+    if not c:
+        return jsonify({"error": "CR not found"}), 404
+
+    # SLA and time tracking
+    sla_data = compute_sla_for(c)
+
+    # manual baseline from history or heuristic
+    baseline_h, source, detail = estimate_manual_baseline_for(c)
+
+    # actual AI runtime in hours (from ai_elapsed_seconds)
+    ai_hours = round((c.ai_elapsed_seconds or 0) / 3600.0, 3)
+
+    # SLA target (from policy table)
+    sla_target_h = None
+    try:
+        from models import SLA
+        policy = SLA.query.filter_by(status=c.status).first()
+        sla_target_h = float(policy.sla_hours) if policy else None
+    except Exception:
+        sla_target_h = None
+
+    # compute savings
+    time_saved = None
+    pct_saved = None
+    if baseline_h and ai_hours > 0:
+        time_saved = max(0.0, baseline_h - ai_hours)
+        pct_saved = round((time_saved / baseline_h) * 100.0, 1)
+
+    # enrich SLA data
+    sla_data.update({
+        "manual_baseline_h": round(baseline_h, 2) if baseline_h else None,
+        "baseline_source": source,
+        "ai_elapsed_h": ai_hours,
+        "sla_target_h": sla_target_h,
+        "time_saved_h": round(time_saved, 2) if time_saved else None,
+        "time_saved_pct": pct_saved,
+        "baseline_detail": detail
+    })
+    return jsonify(sla_data)
+
 
 # --- NEW: rollup SLA summary for dashboard
 @core_bp.route("/sla/summary", methods=["GET"])
