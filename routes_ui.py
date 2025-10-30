@@ -1572,13 +1572,15 @@ async function loadInbox(initialOpen=false) {
     current.add(cr.id);
     const div = document.createElement("div");
     div.className = "border p-3 rounded bg-gray-50";
-    div.innerHTML = `
+   div.innerHTML = `
   <div class="flex items-center justify-between">
     <div>
       <div class="font-semibold">#${cr.id}: ${cr.title}</div>
       <div class="text-sm text-gray-600">Status: <span class="text-blue-700">${cr.status}</span></div>
     </div>
     <div class="flex gap-2">
+      <a href="/cr/${cr.id}/pdf" target="_blank" class="bg-blue-700 text-white px-3 py-1 rounded">📥 PDF</a>
+
       <button class="logs bg-gray-700 text-white px-3 py-1 rounded" data-id="${cr.id}">Logs</button>
       <button class="approve bg-green-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Approve</button>
       <button class="reroute bg-yellow-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Reroute…</button>
@@ -1586,6 +1588,7 @@ async function loadInbox(initialOpen=false) {
   </div>
   <div class="logs-panel hidden mt-2 p-2 bg-white border rounded"></div>
 `;
+
     adminList.appendChild(div);
 
     // Toast for NEW CRs since last fetch

@@ -258,3 +258,164 @@ def can_see_qa(user_id):
     if _can_see_super_admin(user_id):
         return jsonify({"ok": True})
     return jsonify({"error": "forbidden"}), 403
+
+
+
+# routes_core.py (add imports at top if not already present)
+from flask import send_file, jsonify
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, KeepTogether
+import tempfile, os
+
+# --- NEW: robust, readable word cloud helper ---
+def _make_wordcloud_image(text: str) -> str | None:
+    """Return path to a temporary PNG wordcloud image (or None if no text)."""
+    text = (text or "").strip()
+    if not text:
+        return None
+
+    # Headless backend (no X server required)
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from wordcloud import WordCloud, STOPWORDS
+
+    # Build stopword set (tune to your domain)
+    extra_stops = {
+        "the","and","for","with","of","to","in","on","by","a","an","is","are",
+        "this","that","it","as","be","or","from","at","per","etc",
+        # domain-ish noise
+        "change","request","cr","sop","update","updated","revise","revision",
+        "policy","procedure","process","department","team","plant","line",
+        "document","section","impact","justification","problem"
+    }
+    stops = STOPWORDS.union(extra_stops)
+
+    # High-res canvas for print
+    width, height = 1200, 600
+    wc = WordCloud(
+        width=width,
+        height=height,
+        background_color="white",
+        stopwords=stops,
+        collocations=False,           # show single tokens only
+        normalize_plurals=True,
+        prefer_horizontal=1.0,
+        max_words=200,
+        min_font_size=10,
+        max_font_size=150,
+        margin=2,
+    ).generate(text)
+
+    # Render to temp PNG
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    plt.figure(figsize=(width/200, height/200), dpi=200)  # 200 DPI output
+    plt.imshow(wc, interpolation="bilinear")
+    plt.axis("off")
+    plt.tight_layout(pad=0)
+    plt.savefig(tmp.name, dpi=200)
+    plt.close()
+    return tmp.name
+
+
+@core_bp.route("/cr/<int:cr_id>/pdf")
+def cr_pdf(cr_id):
+    from models import ChangeRequest
+    cr = db.session.get(ChangeRequest, cr_id)
+    if not cr:
+        return jsonify({"error": "CR not found"}), 404
+
+    ai = cr.ai_routing or {}
+    summary = ai.get("summary") or {}
+    desc = cr.description or ""
+    word_count = len(desc.split())
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    story = []
+
+    def p(label, text, style="BodyText"):
+        story.append(Paragraph(f"<b>{label}:</b> {text}", styles[style]))
+        story.append(Spacer(1, 8))
+
+    story.append(Paragraph(f"Change Request #{cr.id} — {cr.title or '(Untitled)'}", styles["Title"]))
+    story.append(Spacer(1, 10))
+    p("Status", cr.status or "—", "Normal")
+
+    def bullets(heading, items):
+        items = [i for i in (items or []) if i]
+        story.append(Paragraph(f"<b>{heading}</b>", styles["Heading4"]))
+        if items:
+            for i in items:
+                story.append(Paragraph(f"• {i}", styles["BodyText"]))
+        else:
+            story.append(Paragraph("—", styles["BodyText"]))
+        story.append(Spacer(1, 6))
+
+    story.append(Spacer(1, 6))
+    bullets("Problem",       summary.get("problem"))
+    bullets("Justification", summary.get("justification"))
+    bullets("Impact",        summary.get("impact"))
+
+    # Textual Word Cloud
+    terms = _top_terms(desc, n=15)
+    story.append(Paragraph("Word Cloud", styles["Heading4"]))
+    if terms:
+        wc_line = ", ".join(f"{w} ({c})" for w, c in terms)
+        story.append(Paragraph(wc_line, styles["BodyText"]))
+    else:
+        story.append(Paragraph("—", styles["BodyText"]))
+    story.append(Spacer(1, 10))
+
+    # Routing
+    story.append(Paragraph("Routing", styles["Heading4"]))
+    p("Predicted Dept", ai.get("predicted_department", "—"))
+    owner_name = ai.get("owner_name") or "—"
+    owner_id = ai.get("owner_user_id")
+    owner_text = owner_name if not owner_id else f"{owner_name} (id {owner_id})"
+    p("Owner", owner_text)
+    matched = ai.get("matched_sops") or []
+    sop_codes = []
+    for s in matched:
+        sop_codes.append(s.get("code") if isinstance(s, dict) else str(s))
+    sop_codes = [c for c in sop_codes if c]
+    p("Matched SOPs", ", ".join(sop_codes) if sop_codes else "—")
+    p("Rationale", ai.get("rationale", "—"))
+
+    # Word Count (plain line)
+    p("Word Count (CR Description)", str(word_count), "Normal")
+
+    doc.build(story)
+    buffer.seek(0)
+
+    return send_file(buffer, mimetype="application/pdf",
+                     as_attachment=True, download_name=f"CR_{cr.id}.pdf")
+
+from collections import Counter
+import re
+from wordcloud import STOPWORDS  # just using its stopword set
+
+# ---- textual "word cloud" (top terms) ----
+def _top_terms(text: str, n: int = 15):
+    """
+    Return list of (term, count) from text with stopwords removed.
+    No images; purely textual frequencies.
+    """
+    extra_stops = {
+        "the","and","for","with","of","to","in","on","by","a","an","is","are",
+        "this","that","it","as","be","or","from","at","per","etc",
+        # domain noise
+        "change","request","cr","sop","update","updated","revise","revision",
+        "policy","procedure","process","department","team","plant","line",
+        "document","section","impact","justification","problem"
+    }
+    stops = set(STOPWORDS) | extra_stops
+
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9\-]+", (text or "").lower())
+    tokens = [t for t in tokens if t not in stops and len(t) > 2]
+    counts = Counter(tokens)
+    return counts.most_common(n)
