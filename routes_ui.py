@@ -675,9 +675,11 @@ INDEX = r"""
     </section>
   </div>
 
-  <style>
-    #confidenceRow { display: none; }
-  </style>
+
+ <style>
+
+  #confidenceRow { display: none; }
+</style>
 
 <script>
 const roleSelect   = document.getElementById("roleSelect");
@@ -707,10 +709,6 @@ const confidence = document.getElementById("confidence");
 const rationale  = document.getElementById("rationale");
 const sops       = document.getElementById("sops");
 
-const fileInput    = document.getElementById("fileInput");
-const btnUpload    = document.getElementById("btnUpload");
-const autoRun      = document.getElementById("autoRun");
-const uploadStatus = document.getElementById("uploadStatus");
 const adminList  = document.getElementById("adminList");
 const superList  = document.getElementById("superList");
 const btnRefreshInbox = document.getElementById("btnRefreshInbox");
@@ -719,7 +717,7 @@ const btnRefreshQA    = document.getElementById("btnRefreshQA");
 let currentCR = null;
 let logTimer = null;
 
-// --------- Render helpers ----------
+// --------- NEW: nice render helpers ----------
 let lastSummary = null;
 
 function renderBullets(items) {
@@ -780,15 +778,17 @@ async function renderImpact(crId) {
 
     const sla = data.sla_target_h ?? "—";
     box.innerHTML = `
-      <div><b>🎯 Estimated Processing Time:</b> ${sla}h</div>
-    `;
+      <div><b>🎯 SLA Target:</b> ${sla}h</div>
+
+      </div>`;
   } catch (err) {
     box.innerHTML = "⚠️ Impact data unavailable.";
   }
 }
 
-// ---------- Role gating (QC-only QA board) ----------
-async function setRoleUI() {
+// ---------------------------------------------
+
+function setRoleUI() {
   userSection.classList.add("hidden");
   adminSection.classList.add("hidden");
   superSection.classList.add("hidden");
@@ -897,8 +897,7 @@ btnSpeak?.addEventListener("click", () => {
   synth.speak(utter);
 });
 
-roleSelect.addEventListener("change", () => { setRoleUI(); });
-actorSelect.addEventListener("change", () => { setRoleUI(); });
+roleSelect.addEventListener("change", setRoleUI);
 
 async function loadHeads() {
   const r = await fetch("/_debug/dept_heads");
@@ -958,6 +957,7 @@ btnRunAI.addEventListener("click", async () => {
   aiProgress.classList.add("hidden");
   aiResult.classList.remove("hidden");
 
+  // CHANGED: render a human-friendly summary & SOP chips
   summary.innerHTML = renderSummary(data.summary);
   predDept.textContent = data.predicted_department || "—";
   owner.textContent = data.owner_name ? `${data.owner_name} (id ${data.owner_user_id})` : "—";
@@ -1069,22 +1069,22 @@ async function loadInbox() {
     });
   });
 
-  adminList.querySelectorAll(".logs").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const panel = btn.closest("div.border").querySelector(".logs-panel");
-      if (panel.classList.contains("hidden")) {
-        const r = await fetch(`/cr/${id}/logs`);
-        const data = await r.json();
-        panel.innerHTML = renderLogs(data);
-        panel.classList.remove("hidden");
-        btn.textContent = "Hide Logs";
-      } else {
-        panel.classList.add("hidden");
-        btn.textContent = "Logs";
-      }
-    });
+ adminList.querySelectorAll(".logs").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.getAttribute("data-id");
+    const panel = btn.closest("div.border").querySelector(".logs-panel");
+    if (panel.classList.contains("hidden")) {
+      const r = await fetch(`/cr/${id}/logs`);
+      const data = await r.json();
+      panel.innerHTML = renderLogs(data);
+      panel.classList.remove("hidden");
+      btn.textContent = "Hide Logs";
+    } else {
+      panel.classList.add("hidden");
+      btn.textContent = "Logs";
+    }
   });
+});
 
   adminList.querySelectorAll(".reroute").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -1100,7 +1100,7 @@ async function loadInbox() {
   });
 }
 
-// QA board (QC only)
+// QA board
 btnRefreshQA.addEventListener("click", loadQA);
 async function loadQA() {
   const uid = actorSelect.value;
@@ -1182,7 +1182,8 @@ setRoleUI();
 def index():
     return render_template_string(INDEX)
 
-# (live stage view)
+
+# (you already had this — keep it for live stage view)
 T = """
 <!doctype html><html><body style="font-family:sans-serif">
 <h2>CR {{cr_id}} — AI Stages</h2>
