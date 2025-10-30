@@ -1,2 +1,7 @@
 Flask-SQLAlchemy==3.1.1
 pandas==2.2.3
+openai==1.82.0
+python-dotenv==1.1.0
+Flask-DotEnv==0.1.2
+dotenv==0.9.9
+ 
