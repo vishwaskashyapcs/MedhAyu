@@ -114,3 +114,13 @@ def qa_override(cr_id):
     if "ai_routing" in data: c.ai_routing = data["ai_routing"]
     db.session.commit()
     return jsonify({"ok": True})
+
+# routes_core.py (TEMP DEBUG ENDPOINT — remove later)
+@core_bp.route("/_debug/dept_heads", methods=["GET"])
+def debug_dept_heads():
+    out = {}
+    for u in User.query.filter_by(role="dept_head").all():
+        d = db.session.get(Department, u.department_id)
+        if d:
+            out[d.name] = {"user_id": u.id, "name": u.name}
+    return jsonify(out)

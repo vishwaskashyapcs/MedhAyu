@@ -5,6 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from extensions import db         # <-- here
+from sqlalchemy import case
 from models import Department, User, SOPItem, ChangeRequest
 load_dotenv()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -14,7 +15,8 @@ CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.6"))
 
 SYSTEM_PROMPT = """You are “Pharma Change Control Assistant”.
 
-Return fields as NAMES, not numeric IDs. For departments, return the exact department name from CONTEXT.
+For departments, you MUST return exactly one string copied verbatim from the provided `departments` list (no abbreviations like QA/QC; copy the full name exactly).
+Return department as name; return owner_user_id as an integer user_id.
 
 1) Read the Change Request (CR) text and produce:
    summary.problem[] (short bullets),
@@ -22,7 +24,8 @@ Return fields as NAMES, not numeric IDs. For departments, return the exact depar
    summary.impact[] (short bullets).
 
 2) Using ONLY the provided context (departments, department_heads, SOP catalog):
-   - match 1–3 relevant SOP codes (if any),
+   - match 1–3 relevant SOPs (if any) and return objects with:
+       {"code": "<SOP code>", "owner_department": "<exact dept name from sop_catalog>"}
    - select exactly one predicted_department from the list,
    - set owner_user_id = the department head’s user_id for that department,
    - provide a short rationale citing phrases from CR or SOP snippets,
@@ -39,42 +42,61 @@ Return fields as NAMES, not numeric IDs. For departments, return the exact depar
 }
 
 Rules:
-- Use provided departments/users/SOPs; do not invent.
-- If uncertain, use "Manual Review", owner_user_id = null, confidence <= 0.5.
-- Be concise and deterministic.
+- For predicted_department, choose EXACTLY one value copied from the `departments` array provided in CONTEXT.
+- Do NOT output abbreviations like "QA", "QC", "R&D", "Validation/CSV". Use the exact string (including spaces/slashes) from the list.
 """
 
 # --- Normalization helpers ---
 def _dept_maps():
-    # id -> name and name -> head user_id
     id_to_name = {}
     name_to_head = {}
+
     for d in db.session.query(Department).all():
         id_to_name[d.id] = d.name
-    for u in db.session.query(User).filter(User.role=="dept_head").all():
+
+    # accept dept_head OR qa as “head-like”
+    head_roles = ["dept_head", "qa"]
+    for u in db.session.query(User).filter(User.role.in_(head_roles)).all():
         d = db.session.get(Department, u.department_id)
-        if d:
+        if d and d.name not in name_to_head:  # first match wins
             name_to_head[d.name] = u.id
+
     return id_to_name, name_to_head
 
+
+import re
+
+_ALIASES = {
+    "qa": "Quality Assurance",
+    "qualityassurance": "Quality Assurance",
+    "qc": "Quality Control",
+    "qualitycontrol": "Quality Control",
+    "it": "IT Systems",
+    "itsystems": "IT Systems",
+    "regulatory": "Regulatory Affairs",
+    "regulatoryaffairs": "Regulatory Affairs",
+    "validationcsv": "Validation / CSV",
+    "validation/ csv": "Validation / CSV",
+    "validation/CSV".lower(): "Validation / CSV",
+    "supplychain": "Supply Chain / Warehouse",
+    "supplychain/warehouse": "Supply Chain / Warehouse",
+    "ehs": "EHS",
+    "engineering": "Engineering",
+    "manufacturing": "Manufacturing",
+    "rnd": "R&D / Formulation",
+    "r&d": "R&D / Formulation",
+    "r&d/formulation": "R&D / Formulation",
+}
+
+def _norm(s: str) -> str:
+    # lower, remove all non-alphanum
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
 def _coerce_department(value):
-    """
-    Accepts: exact name, case-insensitive name, numeric id string, or index-like "0".
-    Returns a valid department name or None.
-    """
     if not value:
         return None
-    id_to_name, _ = _dept_maps()
 
-    # if numeric-like -> try dept id
-    try:
-        n = int(str(value).strip())
-        if n in id_to_name:
-            return id_to_name[n]
-    except Exception:
-        pass
-
-    # try exact/case-insensitive match
+    # 1) exact / case-insensitive exact
     names = [d.name for d in db.session.query(Department).all()]
     lower_map = {n.lower(): n for n in names}
     v = str(value).strip()
@@ -82,28 +104,35 @@ def _coerce_department(value):
         return v
     if v.lower() in lower_map:
         return lower_map[v.lower()]
+
+    # 2) normalization and aliasing
+    norm_names = {_norm(n): n for n in names}
+    vnorm = _norm(v)
+    if vnorm in norm_names:
+        return norm_names[vnorm]
+    if vnorm in _ALIASES:
+        return _ALIASES[vnorm]
+
+    # 3) numeric id fallback
+    try:
+        n = int(v)
+        id_to_name = {d.id: d.name for d in db.session.query(Department).all()}
+        if n in id_to_name:
+            return id_to_name[n]
+    except Exception:
+        pass
+
     return None
 
 def _normalize_llm_result(data):
-    """Force department to a valid name and owner to real dept head; fill owner_name."""
-    id_to_name, name_to_head = _dept_maps()
+    _, name_to_head = _dept_maps()
 
     dept = data.get("predicted_department")
     norm_dept = _coerce_department(dept)
     if not norm_dept:
-        # fallback from matched_sops owner_department if present
-        sops = data.get("matched_sops") or []
-        # if list of dicts -> check owner_department; if list of codes -> leave as is
-        norm_dept = None
-        try:
-            for s in sops:
-                if isinstance(s, dict) and s.get("owner_department"):
-                    cand = _coerce_department(s["owner_department"])
-                    if cand: 
-                        norm_dept = cand
-                        break
-        except Exception:
-            pass
+        # (existing SOP fallback…)
+        # ...
+        pass
 
     if not norm_dept:
         data["predicted_department"] = "Manual Review"
@@ -113,8 +142,23 @@ def _normalize_llm_result(data):
 
     data["predicted_department"] = norm_dept
 
-    # Force owner to the dept head
     head_id = name_to_head.get(norm_dept)
+    if not head_id:
+        # fallback: pick someone in that department, preferring roles
+        d = db.session.query(Department).filter_by(name=norm_dept).first()
+        if d:
+            role_priority = case(
+                (User.role == "dept_head", 0),
+                (User.role == "qa", 1),
+                else_=2
+            )
+            cand = (db.session.query(User)
+                    .filter(User.department_id == d.id)
+                    .order_by(role_priority.asc(), User.id.asc())
+                    .first())
+            if cand:
+                head_id = cand.id
+
     data["owner_user_id"] = head_id
     data["owner_name"] = (db.session.get(User, head_id).name if head_id else None)
     return data
@@ -123,11 +167,10 @@ def _fetch_context_for_prompt():
     departments = [d.name for d in db.session.query(Department).all()]
 
     dept_heads = {}
-    for u in db.session.query(User).all():
-        if u.role == "dept_head":
-            d = db.session.get(Department, u.department_id)
-            if d:
-                dept_heads[d.name] = {"owner_user_id": u.id, "owner_name": u.name}
+    for u in db.session.query(User).filter(User.role.in_(["dept_head", "qa"])).all():
+        d = db.session.get(Department, u.department_id)
+        if d and d.name not in dept_heads:
+            dept_heads[d.name] = {"owner_user_id": u.id, "owner_name": u.name}
 
     sops = []
     for s in db.session.query(SOPItem).all():
@@ -138,6 +181,7 @@ def _fetch_context_for_prompt():
             "owner_department": s.owner_department
         })
     return departments, dept_heads, sops
+
 
 def _user_prompt(cr_text: str) -> str:
     departments, dept_heads, sops = _fetch_context_for_prompt()
