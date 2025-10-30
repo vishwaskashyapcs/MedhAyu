@@ -66,12 +66,15 @@ INDEX = r"""
       <h2 class="text-xl font-semibold mb-2">Raise Change Request</h2>
       <input id="crTitle" class="w-full border rounded p-2" placeholder="Title (optional)"/>
       <textarea id="crDesc" class="w-full p-3 border rounded-lg mb-1" rows="5" placeholder="Describe your change request..."></textarea>
-      <div class="flex items-center gap-2">
-        <input id="declaredDept" class="border rounded p-2 w-72" placeholder="Declared department (optional)" />
-        <button id="btnSubmit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">📤 Submit</button>
-        <button id="btnRunAI" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700" disabled>🚀 Run AI</button>
-        <a id="linkLogs" class="text-sm text-blue-600 underline hidden" target="_blank">live logs</a>
-      </div>
+     <div class="flex items-center gap-2 flex-wrap">
+  <input id="declaredDept" class="border rounded p-2 w-72" placeholder="Declared department (optional)" />
+  <button id="btnMicServer" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">☁️ Dictate (server)</button>
+  <span id="micStatus" class="text-sm text-gray-500"></span>
+  <button id="btnSubmit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">📤 Submit</button>
+  <button id="btnRunAI" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700" disabled>🚀 Run AI</button>
+  <a id="linkLogs" class="text-sm text-blue-600 underline hidden" target="_blank">live logs</a>
+</div>
+
 
       <div id="aiProgress" class="mt-2 hidden">
         <div class="text-sm text-gray-500">Processing…</div>
@@ -85,6 +88,10 @@ INDEX = r"""
             <p class="text-sm text-gray-600 mb-1">Summary</p>
             <pre id="summary" class="mono text-sm bg-white border rounded p-2 overflow-auto"></pre>
           </div>
+          <div class="mt-3">
+  <button id="btnSpeak" class="bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700">🔊 Speak Result</button>
+</div>
+
           <div>
             <p class="text-sm text-gray-600 mb-1">Routing</p>
             <div class="text-sm">
@@ -125,6 +132,10 @@ const userSection  = document.getElementById("userSection");
 const adminSection = document.getElementById("adminSection");
 const superSection = document.getElementById("superSection");
 
+const btnMicServer = document.getElementById("btnMicServer");
+const micStatus    = document.getElementById("micStatus");
+const btnSpeak     = document.getElementById("btnSpeak");
+
 const crTitle = document.getElementById("crTitle");
 const crDesc  = document.getElementById("crDesc");
 const decDept = document.getElementById("declaredDept");
@@ -160,6 +171,85 @@ function setRoleUI() {
   if (r === "dept_head") adminSection.classList.remove("hidden");
   if (r === "qa") superSection.classList.remove("hidden");
 }
+
+
+// ---- Server-side STT using MediaRecorder → /voice/stt ----
+let mediaRecorder = null;
+let chunks = [];
+let recording = false;
+
+btnMicServer.addEventListener("click", async () => {
+  if (!recording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const form = new FormData();
+        form.append("audio", blob, "audio.webm");
+        micStatus.textContent = "Uploading audio…";
+        const resp = await fetch("/voice/stt", { method:"POST", body: form });
+        if (!resp.ok) {
+          micStatus.textContent = "Server STT failed.";
+          return;
+        }
+        const data = await resp.json();
+        const t = (data.text || "").trim();
+        if (t) {
+          // Simple parsing: "title ...", "department ...", else -> description
+          const low = t.toLowerCase();
+          if (low.startsWith("title ")) {
+            crTitle.value = t.replace(/^title\s+/i, "");
+            micStatus.textContent = "Title set (server STT).";
+          } else if (low.startsWith("department ") || low.startsWith("declared department ")) {
+            decDept.value = t.replace(/^(declared\s+)?department\s+/i, "");
+            micStatus.textContent = "Declared department set (server STT).";
+          } else {
+            const sep = crDesc.value && !crDesc.value.endsWith("\n") ? "\n" : "";
+            crDesc.value = (crDesc.value || "") + sep + t;
+            micStatus.textContent = "Description updated (server STT).";
+          }
+        } else {
+          micStatus.textContent = "No speech recognized.";
+        }
+      };
+      mediaRecorder.start();
+      recording = true;
+      btnMicServer.textContent = "☁️ Stop";
+      micStatus.textContent = "Recording (server)…";
+    } catch (e) {
+      micStatus.textContent = "Mic error: " + e.message;
+    }
+  } else {
+    recording = false;
+    btnMicServer.textContent = "☁️ Dictate (server)";
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    micStatus.textContent = "Processing…";
+  }
+});
+
+// ---- Speak AI Result (TTS) ----
+btnSpeak?.addEventListener("click", () => {
+  const synth = window.speechSynthesis;
+  if (!synth) return alert("SpeechSynthesis not supported.");
+  const parts = [];
+  if (predDept.textContent) parts.push(`Predicted department: ${predDept.textContent}.`);
+  if (owner.textContent && owner.textContent !== "—") parts.push(`Owner: ${owner.textContent}.`);
+  if (confidence.textContent) parts.push(`Confidence: ${confidence.textContent}.`);
+  try {
+    const sum = JSON.parse(summary.textContent || "{}");
+    const probs = Array.isArray(sum.problem) ? sum.problem.slice(0,2).join("; ") : "";
+    if (probs) parts.push(`Key problems: ${probs}.`);
+  } catch {}
+  const text = parts.join(" ") || "No AI result to speak yet.";
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1.0;
+  synth.cancel();
+  synth.speak(utter);
+});
+
 
 roleSelect.addEventListener("change", setRoleUI);
 
