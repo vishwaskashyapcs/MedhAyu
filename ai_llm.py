@@ -3,6 +3,7 @@ from app import db
 from models import Department, User, SOPItem, ChangeRequest
 from openai import OpenAI
 from dotenv import load_dotenv
+from utils import log_stage
 
 from extensions import db         # <-- here
 from sqlalchemy import case
@@ -246,17 +247,22 @@ def run_ai_for_cr(cr_id: int):
     cr = db.session.get(ChangeRequest, cr_id)
     if not cr:
         return None, "CR not found"
-
+    log_stage(cr.id, "start", f"CR '{cr.title}'")
     prompt = _user_prompt(f"{cr.title}\n\n{cr.description or ''}")
-
+    log_stage(cr.id, "prompt_ready", "Prepared context & prompt")
     try:
         raw = _call_llm_json(SYSTEM_PROMPT, prompt, temperature=0.2, retries=1)
         data_raw = json.loads(raw)
+        log_stage(cr.id, "llm_ok", "LLM returned JSON")
     except Exception:
         data_raw = None
+        log_stage(cr.id, "llm_error", f"{e}", level="error")
 
     data = _coerce_schema(data_raw, cr.description)
+    log_stage(cr.id, "coerce", f"dept={data.get('predicted_department')} conf={data.get('confidence')}")
     data = _normalize_llm_result(data)
+    log_stage(cr.id, "normalize", f"dept={data.get('predicted_department')} owner={data.get('owner_user_id')}")
+
     # include owner_name for UI convenience
     owner_name = None
     if data.get("owner_user_id"):
@@ -284,7 +290,7 @@ def run_ai_for_cr(cr_id: int):
         cr.status = "NEW"
 
     db.session.commit()
-
+    log_stage(cr.id, "status", f"{cr.status} ({cr.department})")
     # return payload for UI
     out = dict(data)
     out["owner_name"] = owner_name
