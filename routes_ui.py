@@ -170,6 +170,17 @@ function renderSummary(sum) {
     </div>`;
 }
  
+function renderLogs(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return `<div class="text-xs text-gray-500">No logs yet.</div>`;
+  }
+  return items.map(x =>
+    `<div class="text-xs mono">
+       [${x.ts}] <b>${x.stage}</b> — ${x.message}
+     </div>`
+  ).join("");
+}
+
 function renderSopChips(sopsArr) {
   if (!Array.isArray(sopsArr) || !sopsArr.length) return "—";
   return sopsArr.map(s => {
@@ -347,17 +358,20 @@ async function loadInbox() {
     const div = document.createElement("div");
     div.className = "border p-3 rounded bg-gray-50";
     div.innerHTML = `
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="font-semibold">#${cr.id}: ${cr.title}</div>
-          <div class="text-sm text-gray-600">Status: <span class="text-blue-700">${cr.status}</span></div>
-        </div>
-        <div class="flex gap-2">
-          <button class="approve bg-green-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Approve</button>
-          <button class="reroute bg-yellow-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Reroute…</button>
-        </div>
-      </div>
-    `;
+  <div class="flex items-center justify-between">
+    <div>
+      <div class="font-semibold">#${cr.id}: ${cr.title}</div>
+      <div class="text-sm text-gray-600">Status: <span class="text-blue-700">${cr.status}</span></div>
+    </div>
+    <div class="flex gap-2">
+      <button class="logs bg-gray-700 text-white px-3 py-1 rounded" data-id="${cr.id}">Logs</button>
+      <button class="approve bg-green-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Approve</button>
+      <button class="reroute bg-yellow-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Reroute…</button>
+    </div>
+  </div>
+  <div class="logs-panel hidden mt-2 p-2 bg-white border rounded"></div>
+`;
+
     adminList.appendChild(div);
   });
  
@@ -369,6 +383,23 @@ async function loadInbox() {
     });
   });
  
+ adminList.querySelectorAll(".logs").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.getAttribute("data-id");
+    const panel = btn.closest("div.border").querySelector(".logs-panel");
+    if (panel.classList.contains("hidden")) {
+      const r = await fetch(`/cr/${id}/logs`);
+      const data = await r.json();
+      panel.innerHTML = renderLogs(data);
+      panel.classList.remove("hidden");
+      btn.textContent = "Hide Logs";
+    } else {
+      panel.classList.add("hidden");
+      btn.textContent = "Logs";
+    }
+  });
+});
+
   adminList.querySelectorAll(".reroute").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-id");
@@ -393,22 +424,27 @@ async function loadQA() {
     const div = document.createElement("div");
     const ai = cr.ai || {};
     div.className = "border p-3 rounded bg-gray-50";
-    div.innerHTML = `
-      <div class="grid md:grid-cols-2 gap-3">
-        <div>
-          <div class="font-semibold">#${cr.id}: ${cr.title}</div>
-          <div class="text-sm">Dept: <b>${cr.dept || '—'}</b> · Status: <b>${cr.status}</b></div>
-          <div class="text-xs mt-1 text-gray-600 mono overflow-auto">${JSON.stringify(ai, null, 2)}</div>
-        </div>
-        <div class="flex items-start gap-2">
-          <input class="dept border rounded p-1" placeholder="Override dept (exact)" value="${cr.dept || ''}"/>
-          <select class="status border rounded p-1">
-            ${["NEW","IN_REVIEW","QA_REVIEW","IMPLEMENTED","CLOSED"].map(s => `<option ${s===cr.status?'selected':''}>${s}</option>`).join("")}
-          </select>
-          <button class="apply bg-indigo-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Apply</button>
-        </div>
+   div.innerHTML = `
+  <div class="grid md:grid-cols-2 gap-3">
+    <div>
+      <div class="font-semibold">#${cr.id}: ${cr.title}</div>
+      <div class="text-sm">Dept: <b>${cr.dept || '—'}</b> · Status: <b>${cr.status}</b></div>
+      <div class="text-xs mt-1 text-gray-600 mono overflow-auto">${JSON.stringify(ai, null, 2)}</div>
+      <div class="mt-2">
+        <button class="logs bg-gray-700 text-white px-3 py-1 rounded" data-id="${cr.id}">Logs</button>
       </div>
-    `;
+      <div class="logs-panel hidden mt-2 p-2 bg-white border rounded"></div>
+    </div>
+    <div class="flex items-start gap-2">
+      <input class="dept border rounded p-1" placeholder="Override dept (exact)" value="${cr.dept || ''}"/>
+      <select class="status border rounded p-1">
+        ${["NEW","IN_REVIEW","QA_REVIEW","IMPLEMENTED","CLOSED"].map(s => `<option ${s===cr.status?'selected':''}>${s}</option>`).join("")}
+      </select>
+      <button class="apply bg-indigo-600 text-white px-3 py-1 rounded" data-id="${cr.id}">Apply</button>
+    </div>
+  </div>
+`;
+
     superList.appendChild(div);
   });
  
@@ -427,7 +463,23 @@ async function loadQA() {
     });
   });
 }
- 
+ superList.querySelectorAll(".logs").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.getAttribute("data-id");
+    const panel = btn.closest("div.border").querySelector(".logs-panel");
+    if (panel.classList.contains("hidden")) {
+      const r = await fetch(`/cr/${id}/logs`);
+      const data = await r.json();
+      panel.innerHTML = renderLogs(data);
+      panel.classList.remove("hidden");
+      btn.textContent = "Hide Logs";
+    } else {
+      panel.classList.add("hidden");
+      btn.textContent = "Logs";
+    }
+  });
+});
+
 // initial
 setRoleUI();
 </script>
