@@ -1,8 +1,8 @@
 # # routes_ui.py
 # from flask import Blueprint, render_template_string
- 
+
 # ui_bp = Blueprint("ui_bp", __name__)
- 
+
 # INDEX = r"""
 # <!doctype html>
 # <html lang="en">
@@ -33,7 +33,7 @@
 #         </select>
 #       </div>
 #     </div>
- 
+
 #     <!-- USER -->
 #     <section id="userSection" class="mt-6 space-y-3">
 #       <h2 class="text-xl font-semibold mb-2">Raise Change Request</h2>
@@ -47,12 +47,12 @@
 #         <button id="btnRunAI" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700" disabled>🚀 Run AI</button>
 #         <a id="linkLogs" class="text-sm text-blue-600 underline hidden" target="_blank">live logs</a>
 #       </div>
- 
+
 #       <div id="aiProgress" class="mt-2 hidden">
 #         <div class="text-sm text-gray-500">Processing…</div>
 #         <ul id="aiSteps" class="mt-1 space-y-1 text-gray-700 mono"></ul>
 #       </div>
- 
+
 #       <div id="aiResult" class="hidden mt-3 bg-green-50 p-4 rounded-lg border border-green-200">
 #         <h3 class="font-semibold text-green-700 mb-2">AI Result</h3>
 #         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -66,7 +66,7 @@
 #           <div class="mt-3">
 #             <button id="btnSpeak" class="bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700">🔊 Speak Result</button>
 #           </div>
- 
+
 #           <div>
 #             <p class="text-sm text-gray-600 mb-1">Routing</p>
 #             <div class="text-sm">
@@ -80,7 +80,7 @@
 #         </div>
 #       </div>
 #     </section>
- 
+
 #     <!-- DEPT ADMIN -->
 #     <section id="adminSection" class="mt-8 hidden">
 #       <div class="flex items-center justify-between">
@@ -89,7 +89,7 @@
 #       </div>
 #       <div id="adminList" class="mt-3 space-y-3"></div>
 #     </section>
- 
+
 #     <!-- QA -->
 #     <section id="superSection" class="mt-8 hidden">
 #       <div class="flex items-center justify-between">
@@ -99,10 +99,10 @@
 #       <div id="superList" class="mt-3 space-y-3"></div>
 #     </section>
 #   </div>
- 
- 
+
+
 #  <style>
-  
+
 #   #confidenceRow { display: none; }
 # </style>
 
@@ -112,18 +112,18 @@
 # const userSection  = document.getElementById("userSection");
 # const adminSection = document.getElementById("adminSection");
 # const superSection = document.getElementById("superSection");
- 
+
 # const btnMicServer = document.getElementById("btnMicServer");
 # const micStatus    = document.getElementById("micStatus");
 # const btnSpeak     = document.getElementById("btnSpeak");
- 
+
 # const crTitle = document.getElementById("crTitle");
 # const crDesc  = document.getElementById("crDesc");
 # const decDept = document.getElementById("declaredDept");
 # const btnSubmit = document.getElementById("btnSubmit");
 # const btnRunAI  = document.getElementById("btnRunAI");
 # const linkLogs  = document.getElementById("linkLogs");
- 
+
 # const aiProgress = document.getElementById("aiProgress");
 # const aiSteps    = document.getElementById("aiSteps");
 # const aiResult   = document.getElementById("aiResult");
@@ -133,18 +133,18 @@
 # const confidence = document.getElementById("confidence");
 # const rationale  = document.getElementById("rationale");
 # const sops       = document.getElementById("sops");
- 
+
 # const adminList  = document.getElementById("adminList");
 # const superList  = document.getElementById("superList");
 # const btnRefreshInbox = document.getElementById("btnRefreshInbox");
 # const btnRefreshQA    = document.getElementById("btnRefreshQA");
- 
+
 # let currentCR = null;
 # let logTimer = null;
- 
+
 # // --------- NEW: nice render helpers ----------
 # let lastSummary = null;
- 
+
 # function renderBullets(items) {
 #   const arr = Array.isArray(items) ? items.filter(Boolean) : [];
 #   if (!arr.length) return '<div class="text-sm text-gray-500">—</div>';
@@ -152,7 +152,7 @@
 #     ${arr.map(x => `<li>${x}</li>`).join("")}
 #   </ul>`;
 # }
- 
+
 # function renderSummary(sum) {
 #   lastSummary = sum || {};
 #   return `
@@ -171,7 +171,7 @@
 #       </div>
 #     </div>`;
 # }
- 
+
 # function renderLogs(items) {
 #   if (!Array.isArray(items) || !items.length) {
 #     return `<div class="text-xs text-gray-500">No logs yet.</div>`;
@@ -209,7 +209,7 @@
 
 #     box.innerHTML = `
 #       <div><b>🎯 Estimated Processing Time:</b> ${sla}h</div>
-    
+
 #       </div>`;
 #   } catch (err) {
 #     box.innerHTML = "⚠️ Impact data unavailable.";
@@ -217,12 +217,12 @@
 # }
 
 # // ---------------------------------------------
- 
+
 # function setRoleUI() {
 #   userSection.classList.add("hidden");
 #   adminSection.classList.add("hidden");
 #   superSection.classList.add("hidden");
- 
+
 #   const r = roleSelect.value;
 #   if (r === "user") userSection.classList.remove("hidden");
 #   if (r === "dept_head") adminSection.classList.remove("hidden");
@@ -246,12 +246,12 @@
 #   }
 # }
 # }
- 
+
 # // ---- Server-side STT using MediaRecorder → /voice/stt ----
 # let mediaRecorder = null;
 # let chunks = [];
 # let recording = false;
- 
+
 # btnMicServer.addEventListener("click", async () => {
 #   if (!recording) {
 #     try {
@@ -302,7 +302,7 @@
 #     micStatus.textContent = "Processing…";
 #   }
 # });
- 
+
 # // ---- Speak AI Result (TTS) ----
 # btnSpeak?.addEventListener("click", () => {
 #   const synth = window.speechSynthesis;
@@ -319,9 +319,9 @@
 #   synth.cancel();
 #   synth.speak(utter);
 # });
- 
+
 # roleSelect.addEventListener("change", setRoleUI);
- 
+
 # async function loadHeads() {
 #   const r = await fetch("/_debug/dept_heads");
 #   const heads = await r.json();
@@ -334,7 +334,7 @@
 #   }
 # }
 # loadHeads().then(setRoleUI);
- 
+
 # // Submit CR
 # btnSubmit.addEventListener("click", async () => {
 #   const body = {
@@ -343,7 +343,7 @@
 #     declared_department: decDept.value || null
 #   };
 #   if (!body.description.trim()) { alert("Please add a description."); return; }
- 
+
 #   const r = await fetch("/cr/submit", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
 #   const data = await r.json();
 #   currentCR = data.cr_id;
@@ -355,14 +355,14 @@
 #   aiProgress.classList.add("hidden");
 #   alert(`CR #${currentCR} created (status: ${data.status}). Click "Run AI".`);
 # });
- 
+
 # // Run AI
 # btnRunAI.addEventListener("click", async () => {
 #   if (!currentCR) { alert("Submit a CR first."); return; }
 #   aiProgress.classList.remove("hidden");
 #   aiSteps.innerHTML = `<li class="mono">… calling AI</li>`;
 #   aiResult.classList.add("hidden");
- 
+
 #   // start polling logs
 #   if (logTimer) clearInterval(logTimer);
 #   logTimer = setInterval(async () => {
@@ -371,15 +371,15 @@
 #     const logs = await r.json();
 #     aiSteps.innerHTML = logs.map(l => `<li class="mono">[${l.ts}] <b>${l.stage}</b> — ${l.message}</li>`).join("");
 #   }, 1200);
- 
+
 #   const r = await fetch(`/cr/${currentCR}/run_ai`, { method:"POST" });
 #   const data = await r.json();
- 
+
 #   if (logTimer) { clearInterval(logTimer); logTimer = null; }
- 
+
 #   aiProgress.classList.add("hidden");
 #   aiResult.classList.remove("hidden");
- 
+
 #   // CHANGED: render a human-friendly summary & SOP chips
 #   summary.innerHTML = renderSummary(data.summary);
 #   predDept.textContent = data.predicted_department || "—";
@@ -422,7 +422,7 @@
 
 #     adminList.appendChild(div);
 #   });
- 
+
 #   adminList.querySelectorAll(".approve").forEach(btn => {
 #     btn.addEventListener("click", async () => {
 #       const id = btn.getAttribute("data-id");
@@ -430,7 +430,7 @@
 #       if (r.ok) { loadInbox(); } else { alert("approve failed"); }
 #     });
 #   });
- 
+
 #  adminList.querySelectorAll(".logs").forEach(btn => {
 #   btn.addEventListener("click", async () => {
 #     const id = btn.getAttribute("data-id");
@@ -461,7 +461,7 @@
 #     });
 #   });
 # }
- 
+
 # // QA board
 # btnRefreshQA.addEventListener("click", loadQA);
 # async function loadQA() {
@@ -495,7 +495,7 @@
 
 #     superList.appendChild(div);
 #   });
- 
+
 #   superList.querySelectorAll(".apply").forEach(btn => {
 #     btn.addEventListener("click", async () => {
 #       const row = btn.closest("div.border");
@@ -534,12 +534,12 @@
 # </body>
 # </html>
 # """
- 
+
 # @ui_bp.route("/")
 # def index():
 #     return render_template_string(INDEX)
- 
- 
+
+
 # # (you already had this — keep it for live stage view)
 # T = """
 # <!doctype html><html><body style="font-family:sans-serif">
@@ -559,7 +559,7 @@
 # @ui_bp.route("/demo/ai/<int:cr_id>")
 # def demo_ai(cr_id):
 #     return render_template_string(T, cr_id=cr_id)
- 
+
 # routes_ui.py
 from flask import Blueprint, render_template_string
 
@@ -599,6 +599,21 @@ INDEX = r"""
     <!-- USER -->
     <section id="userSection" class="mt-6 space-y-3">
       <h2 class="text-xl font-semibold mb-2">Raise Change Request</h2>
+      <div class="rounded-lg border bg-gray-50 p-3">
+        <div class="flex flex-col md:flex-row md:items-center gap-3">
+          <div class="flex items-center gap-2">
+            <input id="fileInput" type="file" accept=".txt,.docx,.pdf"
+                   class="block text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"/>
+            <button id="btnUpload" class="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700">📄 Upload & Extract</button>
+          </div>
+          <label class="text-sm text-gray-600 flex items-center gap-2">
+            <input id="autoRun" type="checkbox" class="accent-indigo-600" checked/>
+            Auto-run AI after creating CR
+          </label>
+          <a id="tplLink" href="/upload/template.pdf" class="text-sm text-indigo-700 underline">Download fixed format template (PDF)</a>
+          <span id="uploadStatus" class="text-sm text-gray-500"></span>
+        </div>
+      </div>
       <input id="crTitle" class="w-full border rounded p-2" placeholder="Title (optional)"/>
       <textarea id="crDesc" class="w-full p-3 border rounded-lg mb-1" rows="5" placeholder="Describe your change request..."></textarea>
       <div class="flex items-center gap-2 flex-wrap">
@@ -692,6 +707,10 @@ const confidence = document.getElementById("confidence");
 const rationale  = document.getElementById("rationale");
 const sops       = document.getElementById("sops");
 
+const fileInput    = document.getElementById("fileInput");
+const btnUpload    = document.getElementById("btnUpload");
+const autoRun      = document.getElementById("autoRun");
+const uploadStatus = document.getElementById("uploadStatus");
 const adminList  = document.getElementById("adminList");
 const superList  = document.getElementById("superList");
 const btnRefreshInbox = document.getElementById("btnRefreshInbox");
@@ -948,6 +967,68 @@ btnRunAI.addEventListener("click", async () => {
 
   renderImpact(currentCR);
 });
+
+
+btnUpload.addEventListener("click", async () => {
+  const f = fileInput.files?.[0];
+  if (!f) { alert("Choose a .txt/.docx/.pdf file first."); return; }
+  uploadStatus.textContent = "Uploading…";
+  const form = new FormData();
+  form.append("file", f, f.name);
+  form.append("auto_run_ai", autoRun.checked ? "1" : "0");
+
+  try {
+    const r = await fetch("/upload/parse", { method:"POST", body: form });
+
+    // SAFER JSON PARSE
+    const ct = r.headers.get("Content-Type") || "";
+    const payload = ct.includes("application/json") ? await r.json()
+                                                    : { error: (await r.text()).slice(0, 500) };
+
+    if (!r.ok || payload.error) {
+      uploadStatus.textContent = "Upload failed.";
+      alert("Upload failed: " + (payload.error || `HTTP ${r.status}`));
+      return;
+    }
+
+    const data = payload; // continue with your existing success logic
+    const p = data.parsed || {};
+    if (p.title) crTitle.value = p.title;
+    if (p.description) crDesc.value = p.description;
+    if (p.department) decDept.value = p.department;
+
+    if (typeof data.cr_id === "number") {
+      currentCR = data.cr_id;
+      btnRunAI.disabled = false;
+      linkLogs.classList.remove("hidden");
+      linkLogs.href = `/demo/ai/${currentCR}`;
+    }
+
+    if (data.ai) {
+      aiResult.classList.remove("hidden");
+      summary.innerHTML = renderSummary(data.ai.summary);
+      predDept.textContent = data.ai.predicted_department || "—";
+      owner.textContent = data.ai.owner_name ? `${data.ai.owner_name} (id ${data.ai.owner_user_id})` : "—";
+      confidence.textContent = data.ai.confidence?.toFixed ? data.ai.confidence.toFixed(2) : String(data.ai.confidence ?? "—");
+      rationale.textContent = data.ai.rationale || "—";
+      sops.innerHTML = renderSopChips(data.ai.matched_sops);
+      renderImpact(currentCR);
+    } else {
+      aiResult.classList.add("hidden");
+    }
+
+    uploadStatus.textContent = `Created CR #${currentCR}${autoRun.checked ? " (AI processed)" : ""}.`;
+  } catch (e) {
+    uploadStatus.textContent = "Upload failed.";
+    alert("Upload failed: " + e.message);
+  }
+});
+
+
+
+
+
+
 
 // Admin inbox (dept_head)
 btnRefreshInbox.addEventListener("click", loadInbox);
