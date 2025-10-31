@@ -554,3 +554,82 @@ def upload_template_pdf():
     buf.seek(0)
     return send_file(buf, mimetype="application/pdf",
                      as_attachment=True, download_name="CR_fixed_template.pdf")
+
+
+# --- QA summary report (CSV download)
+from io import StringIO
+import csv
+from flask import send_file, make_response
+from datetime import datetime
+from collections import defaultdict
+
+@core_bp.route("/reports/qa-summary", methods=["GET"])
+def qa_summary_report():
+    from models import ChangeRequest, Department, SLA, CRLog
+
+    # Pull all data
+    crs = ChangeRequest.query.order_by(ChangeRequest.id.asc()).all()
+    depts = {d.id: d.name for d in Department.query.all()}
+
+    # SLA lookup (status -> hours)
+    sla_map = {s.status: int(s.sla_hours or 0) for s in SLA.query.all()}
+
+    # Per-department aggregation
+    per_dept = defaultdict(lambda: {"TOTAL": 0, "NEW": 0, "IN_REVIEW": 0, "QA_REVIEW": 0, "IMPLEMENTED": 0, "CLOSED": 0})
+    total_closed = 0
+    total_est_hours = 0
+
+    # Build a “flat” table of CRs with a few columns
+    flat_rows = []
+    for c in crs:
+        dept = c.department or ""
+        per_dept[dept]["TOTAL"] += 1
+        per_dept[dept][c.status] += 1
+        if c.status == "CLOSED":
+            total_closed += 1
+
+        est = sla_map.get(c.status, 0)
+        total_est_hours += est
+
+        # first/last log times (if CRLog model is present)
+        first_log = CRLog.query.filter_by(cr_id=c.id).order_by(CRLog.ts.asc()).first()
+        last_log  = CRLog.query.filter_by(cr_id=c.id).order_by(CRLog.ts.desc()).first()
+        first_ts = first_log.ts.isoformat() if first_log else ""
+        last_ts  = last_log.ts.isoformat() if last_log else ""
+
+        flat_rows.append([
+            c.id, c.title or "", dept, c.status, est,
+            (c.ai_routing or {}).get("predicted_department", ""),
+            (c.ai_routing or {}).get("owner_user_id", ""),
+            (c.ai_routing or {}).get("rationale", ""),
+            first_ts, last_ts
+        ])
+
+    # Render CSV in-memory
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(["QA SUMMARY REPORT", datetime.utcnow().isoformat()])
+    w.writerow([])
+    w.writerow(["Totals"])
+    w.writerow(["Total CRs", len(crs)])
+    w.writerow(["Total Closed", total_closed])
+    w.writerow(["Estimated Hours (sum by status)", total_est_hours])
+    w.writerow([])
+
+    w.writerow(["Per-Department"])
+    w.writerow(["Department","TOTAL","NEW","IN_REVIEW","QA_REVIEW","IMPLEMENTED","CLOSED"])
+    for dept, agg in sorted(per_dept.items()):
+        w.writerow([dept or "(Unassigned)",
+                    agg["TOTAL"], agg["NEW"], agg["IN_REVIEW"], agg["QA_REVIEW"], agg["IMPLEMENTED"], agg["CLOSED"]])
+    w.writerow([])
+
+    w.writerow(["All Change Requests"])
+    w.writerow(["CR ID","Title","Department","Status","Est. Hours",
+               "AI Predicted Dept","Owner User ID","AI Rationale","First Log","Last Log"])
+    w.writerows(flat_rows)
+
+    csv_data = buf.getvalue().encode("utf-8")
+    resp = make_response(csv_data)
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    resp.headers["Content-Disposition"] = 'attachment; filename="qa_summary_report.csv"'
+    return resp
