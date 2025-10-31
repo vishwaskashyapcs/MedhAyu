@@ -419,3 +419,138 @@ def _top_terms(text: str, n: int = 15):
     tokens = [t for t in tokens if t not in stops and len(t) > 2]
     counts = Counter(tokens)
     return counts.most_common(n)
+
+
+
+from flask import Blueprint, request, jsonify, send_file
+from werkzeug.utils import secure_filename
+from io import BytesIO
+import os, re
+
+# Optional parsers (fine if missing; we fall back to plain text)
+try:
+    from pdfminer.high_level import extract_text as pdf_extract_text
+except Exception:
+    pdf_extract_text = None
+
+try:
+    import docx  # python-docx
+except Exception:
+    docx = None
+
+def _extract_text_from_upload(file_storage):
+    """Return plain text from .txt/.pdf/.docx; fallback to bytes->utf-8."""
+    if not file_storage:
+        return ""
+    filename = secure_filename(file_storage.filename or "")
+    ext = os.path.splitext(filename.lower())[1]
+    data = file_storage.read()  # bytes
+
+    if ext == ".txt":
+        try:
+            return data.decode("utf-8", errors="ignore")
+        except Exception:
+            return data.decode("latin-1", errors="ignore")
+
+    if ext == ".pdf" and pdf_extract_text:
+        try:
+            return pdf_extract_text(BytesIO(data)) or ""
+        except Exception:
+            return ""
+
+    if ext == ".docx" and docx:
+        try:
+            doc = docx.Document(BytesIO(data))
+            return "\n".join(p.text for p in doc.paragraphs if p.text) or ""
+        except Exception:
+            return ""
+
+    # Fallback
+    try:
+        return data.decode("utf-8", errors="ignore")
+    except Exception:
+        return data.decode("latin-1", errors="ignore")
+
+_DEPT_KEYS = [
+    "Manufacturing", "Quality Assurance", "Quality Control", "Engineering",
+    "Validation / CSV", "IT Systems", "Regulatory Affairs",
+    "Supply Chain / Warehouse", "EHS", "R&D / Formulation"
+]
+
+def _parse_title_desc_dept(full_text: str):
+    """Heuristic parse for title/description/department."""
+    text = (full_text or "").strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    # Department line (Department: <name>)
+    dept = None
+    for ln in lines[:8]:
+        m = re.search(r"^(dept|department)\s*:\s*(.+)$", ln, flags=re.I)
+        if m:
+            guess = m.group(2).strip()
+            for d in _DEPT_KEYS:
+                if d.lower() == guess.lower() or guess.lower() in d.lower():
+                    dept = d
+                    break
+            break
+
+    # Title = first non-empty line that is not a Dept label
+    title = ""
+    for ln in lines:
+        if re.match(r"^(dept|department)\s*:", ln, flags=re.I):
+            continue
+        title = ln[:120].strip()
+        break
+
+    desc_lines, used = [], False
+    for ln in lines:
+        if not used and ln == title:
+            used = True
+            continue
+        desc_lines.append(ln)
+    description = "\n".join(desc_lines).strip()
+
+    if not dept:
+        lower_all = text.lower()
+        for d in _DEPT_KEYS:
+            if d.lower() in lower_all:
+                dept = d
+                break
+
+    return {"title": title, "description": description, "declared_department": (dept or "")}
+
+@core_bp.route("/upload/extract", methods=["POST"])
+def upload_extract():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No file received"}), 400
+    txt = _extract_text_from_upload(f)
+    out = _parse_title_desc_dept(txt)
+    return jsonify(out), 200
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+
+@core_bp.route("/upload/template", methods=["GET"])
+def upload_template_pdf():
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Change Request — Fixed Format Template", styles["Title"]))
+    story.append(Spacer(1, 12))
+    for label, hint in [
+        ("Department:", "(e.g., Manufacturing / Quality Assurance / IT Systems …)"),
+        ("Title:", "(brief)"),
+        ("Problem:", "(bullets allowed)"),
+        ("Justification:", ""),
+        ("Impact:", ""),
+        ("Details:", "(full description)"),
+    ]:
+        story.append(Paragraph(f"<b>{label}</b> {hint}", styles["BodyText"]))
+        story.append(Spacer(1, 10))
+    doc.build(story)
+    buf.seek(0)
+    return send_file(buf, mimetype="application/pdf",
+                     as_attachment=True, download_name="CR_fixed_template.pdf")
