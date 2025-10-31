@@ -250,13 +250,7 @@ def run_ai_for_cr(cr_id: int):
     log_stage(cr.id, "start", f"CR '{cr.title}'")
     prompt = _user_prompt(f"{cr.title}\n\n{cr.description or ''}")
     log_stage(cr.id, "prompt_ready", "Prepared context & prompt")
-    # try:
-    #     raw = _call_llm_json(SYSTEM_PROMPT, prompt, temperature=0.2, retries=1)
-    #     data_raw = json.loads(raw)
-    #     log_stage(cr.id, "llm_ok", "LLM returned JSON")
-    # except Exception:
-    #     data_raw = None
-    #     log_stage(cr.id, "llm_error", f"{e}", level="error")
+
 
     try:
         raw = _call_llm_json(SYSTEM_PROMPT, prompt, temperature=0.2, retries=1)

@@ -1,14 +1,4 @@
-# from flask import Blueprint, jsonify
-# from ai_llm import run_ai_for_cr
 
-# ai_bp = Blueprint("ai_bp", __name__)
-
-# @ai_bp.route("/ai/run/<int:cr_id>", methods=["POST"])
-# def ai_run(cr_id):
-#     data, err = run_ai_for_cr(cr_id)
-#     if err:
-#         return jsonify({"error": err}), 404
-#     return jsonify(data), 200
 
 from flask import Blueprint, request, jsonify
 from extensions import db
@@ -96,31 +86,6 @@ def reroute_cr(cr_id):
     log_stage(c.id, "reroute", f"Dept head rerouted: {old or '—'} → {target_dept}")
     return jsonify({"ok": True, "status": c.status, "department": c.department})
 
-# # ---- QA Board (super admin)
-# @core_bp.route("/board/qa", methods=["GET"])
-# def qa_board():
-#     crs = ChangeRequest.query.order_by(ChangeRequest.id.asc()).all()
-#     out = []
-#     for c in crs:
-#         out.append({
-#             "id": c.id, "title": c.title, "dept": c.department,
-#             "status": c.status, "ai": c.ai_routing
-#         })
-#     return jsonify(out)
-
-# # ---- QA override (manual changes)
-# @core_bp.route("/cr/<int:cr_id>/override", methods=["POST"])
-# def qa_override(cr_id):
-#     data = request.get_json(silent=True) or {}
-#     c = db.session.get(ChangeRequest, cr_id)
-#     if not c: return jsonify({"error":"CR not found"}), 404
-#     old_dept, old_status = c.department, c.status
-#     if "department" in data: c.department = data["department"]
-#     if "status" in data: c.status = data["status"]
-#     if "ai_routing" in data: c.ai_routing = data["ai_routing"]
-#     db.session.commit()
-#     log_stage(c.id, "qa_override", f"QA override: dept {old_dept or '—'}→{c.department or '—'}, status {old_status}→{c.status}")
-#     return jsonify({"ok": True})
 
 # ---- QA Board (super admin)
 @core_bp.route("/board/qa", methods=["GET"])
