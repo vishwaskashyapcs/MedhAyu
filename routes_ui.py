@@ -1243,14 +1243,19 @@ INDEX = r"""
     </section>
 
     <!-- QA -->
-    <section id="superSection" class="mt-8 hidden">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold">QA Board</h2>
-        <button id="btnRefreshQA" class="text-sm bg-gray-800 text-white px-3 py-1 rounded">Refresh</button>
-      </div>
-      <div id="superList" class="mt-3 space-y-3"></div>
-    </section>
+  <!-- QA -->
+<section id="superSection" class="mt-8 hidden">
+  <div class="flex items-center justify-between">
+    <h2 class="text-xl font-semibold">QA Board</h2>
+    <div class="flex items-center gap-2">
+      <!-- NEW: Download Report (only shown in QA role) -->
+      <button id="btnDownloadQA" class="hidden text-sm bg-indigo-600 text-white px-3 py-1 rounded">⬇️ Download Report</button>
+      <button id="btnRefreshQA" class="text-sm bg-gray-800 text-white px-3 py-1 rounded">Refresh</button>
+    </div>
   </div>
+  <div id="superList" class="mt-3 space-y-3"></div>
+</section>
+
 
   <style>
     #confidenceRow { display: none; }
@@ -1317,6 +1322,7 @@ const adminList  = document.getElementById("adminList");
 const superList  = document.getElementById("superList");
 const btnRefreshInbox = document.getElementById("btnRefreshInbox");
 const btnRefreshQA    = document.getElementById("btnRefreshQA");
+const btnDownloadQA = document.getElementById("btnDownloadQA");
 
 let currentCR = null;
 let logTimer = null;
@@ -1853,6 +1859,28 @@ async function loadQA() {
     });
   });
 }
+
+function setRoleUI() {
+  userSection.classList.add("hidden");
+  adminSection.classList.add("hidden");
+  superSection.classList.add("hidden");
+
+  const r = roleSelect.value;
+  // Toggle sections
+  if (r === "user") userSection.classList.remove("hidden");
+  if (r === "dept_head") adminSection.classList.remove("hidden");
+  if (r === "qa") superSection.classList.remove("hidden");
+
+  // Show the Download button only for QA role
+  if (btnDownloadQA) {
+    if (r === "qa") btnDownloadQA.classList.remove("hidden");
+    else btnDownloadQA.classList.add("hidden");
+  }
+}
+btnDownloadQA?.addEventListener("click", () => {
+  // simplest: navigate to CSV endpoint (browser will download)
+  window.location.href = "/reports/qa-summary";
+});
 
 // initial
 setRoleUI();
