@@ -1163,6 +1163,33 @@ INDEX = r"""
 
     <!-- USER -->
     <section id="userSection" class="mt-6 space-y-3">
+    <h2 class="text-xl font-semibold mb-2">Raise Change Request</h2>
+
+
+  <!-- File upload & extract row -->
+<div class="flex items-center gap-3 flex-wrap mb-3">
+  <input type="file" id="fileInput" class="hidden" accept=".txt,.pdf,.docx"/>
+  <label for="fileInput"
+         class="cursor-pointer bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+    Choose File
+  </label>
+  <span id="fileName" class="text-sm text-gray-700"></span>
+
+  <button id="btnExtract" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+    <span class="inline-block mr-1">📄</span> Upload & Extract
+  </button>
+
+  <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+    <input type="checkbox" id="autoRun" class="w-4 h-4" checked/>
+    Auto-run AI after creating CR
+  </label>
+
+  <a href="/upload/template" target="_blank" class="text-indigo-700 underline">
+    Download fixed format template (PDF)
+  </a>
+</div>
+
+
       <h2 class="text-xl font-semibold mb-2">Raise Change Request</h2>
       <input id="crTitle" class="w-full border rounded p-2" placeholder="Title (optional)"/>
       <textarea id="crDesc" class="w-full p-3 border rounded-lg mb-1" rows="5" placeholder="Describe your change request..."></textarea>
@@ -1261,6 +1288,13 @@ const superSection = document.getElementById("superSection");
 const btnMicServer = document.getElementById("btnMicServer");
 const micStatus    = document.getElementById("micStatus");
 const btnSpeak     = document.getElementById("btnSpeak");
+
+const fileInput  = document.getElementById("fileInput");
+const fileName   = document.getElementById("fileName");
+const btnExtract = document.getElementById("btnExtract");
+const autoRun    = document.getElementById("autoRun");
+
+
 
 const crTitle = document.getElementById("crTitle");
 const crDesc  = document.getElementById("crDesc");
@@ -1390,6 +1424,103 @@ async function setRoleUI() {
     }
   }
 }
+
+fileInput.addEventListener("change", () => {
+  fileName.textContent = fileInput.files[0]?.name || "";
+});
+
+async function createCR({ autoRunAI = false } = {}) {
+  const body = {
+    title: crTitle.value || "",
+    description: crDesc.value || "",
+    declared_department: decDept.value || null
+  };
+  if (!body.description.trim()) {
+    alert("Please add a description (or upload & extract first).");
+    return;
+  }
+
+  // create CR
+  const r = await fetch("/cr/submit", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  const data = await r.json();
+  currentCR = data.cr_id;
+
+  btnRunAI.disabled = false;
+  linkLogs.classList.remove("hidden");
+  linkLogs.href = `/demo/ai/${currentCR}`;
+  aiResult.classList.add("hidden");
+  aiSteps.innerHTML = "";
+  aiProgress.classList.add("hidden");
+
+  if (autoRunAI) {
+    aiProgress.classList.remove("hidden");
+    aiSteps.innerHTML = `<li class="mono">… calling AI</li>`;
+    if (logTimer) clearInterval(logTimer);
+    logTimer = setInterval(async () => {
+      const r = await fetch(`/cr/${currentCR}/logs`);
+      if (!r.ok) return;
+      const logs = await r.json();
+      aiSteps.innerHTML = logs.map(l => `<li class="mono">[${l.ts}] <b>${l.stage}</b> — ${l.message}</li>`).join("");
+    }, 1200);
+
+    const run = await fetch(`/cr/${currentCR}/run_ai`, { method: "POST" });
+    const aiData = await run.json();
+
+    if (logTimer) { clearInterval(logTimer); logTimer = null; }
+    aiProgress.classList.add("hidden");
+    aiResult.classList.remove("hidden");
+
+    summary.innerHTML = renderSummary(aiData.summary);
+    predDept.textContent = aiData.predicted_department || "—";
+    owner.textContent = aiData.owner_name ? `${aiData.owner_name} (id ${aiData.owner_user_id})` : "—";
+    rationale.textContent = aiData.rationale || "—";
+    sops.innerHTML = renderSopChips(aiData.matched_sops);
+
+    // clear inputs after success
+    crTitle.value = "";
+    crDesc.value = "";
+    decDept.value = "";
+  }
+
+  return data;
+}
+
+btnExtract.addEventListener("click", async () => {
+  if (!fileInput.files[0]) {
+    alert("Choose a file first (.txt, .pdf, .docx).");
+    return;
+  }
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+
+  btnExtract.disabled = true; btnExtract.textContent = "Extracting…";
+  try {
+    const r = await fetch("/upload/extract", { method: "POST", body: fd });
+    if (!r.ok) {
+      const t = await r.text();
+      alert("Extract failed: " + t);
+      return;
+    }
+    const data = await r.json();
+    crTitle.value = data.title || "";
+    crDesc.value = data.description || "";
+    decDept.value = data.declared_department || "";
+
+    if (autoRun.checked) {
+      await createCR({ autoRunAI: true });
+    } else {
+      alert("Content extracted. Review and click Submit.");
+    }
+  } finally {
+    btnExtract.disabled = false; btnExtract.textContent = "Upload & Extract";
+  }
+});
+
+// (Your existing btnSubmit and btnRunAI handlers can remain)
 
 /* ---- Server-side STT ---- */
 let mediaRecorder = null;
